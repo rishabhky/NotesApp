@@ -1,12 +1,14 @@
+import 'dart:convert';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_quill/flutter_quill.dart';
 import 'package:get/get.dart';
-import 'package:get/get_core/src/get_main.dart';
 import 'package:notes/screens/home.dart';
+import 'package:tuple/tuple.dart';
 
 class EditScreen extends StatefulWidget {
-  final String? documentId; // Nullable to support create mode
+  final String? documentId;
 
   const EditScreen({super.key, this.documentId});
 
@@ -16,14 +18,15 @@ class EditScreen extends StatefulWidget {
 
 class _EditScreenState extends State<EditScreen> {
   late TextEditingController titleController;
-  late TextEditingController noticeController;
+  late QuillController _quillController;
   FirebaseFirestore firestore = FirebaseFirestore.instance;
 
   @override
   void initState() {
     super.initState();
     titleController = TextEditingController();
-    noticeController = TextEditingController();
+    _quillController = QuillController.basic();
+
     if (widget.documentId != null && widget.documentId!.isNotEmpty) {
       fetchNoticeDetails();
     }
@@ -38,7 +41,17 @@ class _EditScreenState extends State<EditScreen> {
       if (doc.exists) {
         final data = doc.data() as Map<String, dynamic>;
         titleController.text = data['title'] ?? '';
-        noticeController.text = data['text'] ?? '';
+
+        final contentJson = data['text'];
+        if (contentJson != null) {
+          final docContent = Document.fromJson(jsonDecode(contentJson));
+          setState(() {
+            _quillController = QuillController(
+              document: docContent,
+              selection: const TextSelection.collapsed(offset: 0),
+            );
+          });
+        }
       }
     } catch (e) {
       ScaffoldMessenger.of(
@@ -49,20 +62,20 @@ class _EditScreenState extends State<EditScreen> {
 
   Future<void> saveOrUpdateNotice() async {
     try {
-      FocusScope.of(context).requestFocus(FocusNode()); // Remove focus
-      await Future.delayed(
-        const Duration(milliseconds: 100),
-      ); // Wait for keyboard to hide
+      FocusScope.of(context).unfocus();
+      await Future.delayed(const Duration(milliseconds: 100));
+
+      final content = jsonEncode(_quillController.document.toDelta().toJson());
 
       if (widget.documentId != null && widget.documentId!.isNotEmpty) {
         await firestore.collection('notices').doc(widget.documentId).update({
           'title': titleController.text,
-          'text': noticeController.text,
+          'text': content,
         });
       } else {
         await firestore.collection('notices').add({
           'title': titleController.text,
-          'text': noticeController.text,
+          'text': content,
           'timestamp': FieldValue.serverTimestamp(),
         });
       }
@@ -101,11 +114,11 @@ class _EditScreenState extends State<EditScreen> {
     }
   }
 
-  void addDocumentToHomeCollection(String title, String content) async {
+  void addDocumentToHomeCollection(String title, String contentJson) async {
     try {
       await firestore.collection('selected').doc('selected').set({
         'title': title,
-        'content': content,
+        'content': contentJson,
       });
       ScaffoldMessenger.of(
         context,
@@ -113,13 +126,6 @@ class _EditScreenState extends State<EditScreen> {
     } catch (e) {
       print('Error adding to home: $e');
     }
-  }
-
-  @override
-  void dispose() {
-    titleController.dispose();
-    noticeController.dispose();
-    super.dispose();
   }
 
   void _showActions() {
@@ -147,10 +153,10 @@ class _EditScreenState extends State<EditScreen> {
                 style: TextStyle(color: Colors.grey),
               ),
               onTap: () {
-                addDocumentToHomeCollection(
-                  titleController.text,
-                  noticeController.text,
+                final content = jsonEncode(
+                  _quillController.document.toDelta().toJson(),
                 );
+                addDocumentToHomeCollection(titleController.text, content);
                 Navigator.pop(context);
               },
             ),
@@ -165,7 +171,6 @@ class _EditScreenState extends State<EditScreen> {
               ),
               onTap: () async {
                 Navigator.pop(context);
-
                 final confirm = await showDialog<bool>(
                   context: context,
                   builder: (context) => AlertDialog(
@@ -191,7 +196,6 @@ class _EditScreenState extends State<EditScreen> {
 
                 if (confirm == true) {
                   await deleteNotice();
-
                   if (mounted) {
                     Navigator.of(context).pushAndRemoveUntil(
                       MaterialPageRoute(builder: (_) => const HomePage()),
@@ -208,6 +212,13 @@ class _EditScreenState extends State<EditScreen> {
   }
 
   @override
+  void dispose() {
+    titleController.dispose();
+    _quillController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.black,
@@ -216,7 +227,6 @@ class _EditScreenState extends State<EditScreen> {
         child: Column(
           children: [
             Row(
-              mainAxisAlignment: MainAxisAlignment.start,
               children: [
                 IconButton(
                   onPressed: () => Navigator.pop(context),
@@ -250,16 +260,140 @@ class _EditScreenState extends State<EditScreen> {
                       ),
                     ),
                   ),
-                  TextField(
-                    controller: noticeController,
-                    maxLines: null,
-                    style: const TextStyle(color: Colors.grey, fontSize: 18),
-                    decoration: InputDecoration(
-                      border: InputBorder.none,
-                      hintText: "Notice Content",
-                      hintStyle: TextStyle(
-                        color: Colors.grey.withOpacity(0.8),
-                        fontSize: 18,
+                  const SizedBox(height: 12),
+                  QuillSimpleToolbar(
+                    controller: _quillController,
+                    config: const QuillSimpleToolbarConfig(
+                      iconTheme: QuillIconTheme(
+                        iconButtonSelectedData: IconButtonData(
+                          color: Colors.white,
+                          iconSize: 20,
+                        ),
+                        iconButtonUnselectedData: IconButtonData(
+                          color: Colors.white54,
+                          iconSize: 20,
+                        ),
+                      ),
+                      showFontSize: true,
+                      showBoldButton: true,
+                      showItalicButton: true,
+                      showListCheck: true,
+                      showListBullets: true,
+                      showListNumbers: true,
+
+                      showStrikeThrough: false,
+                      showUnderLineButton: true,
+                      showCodeBlock: false,
+                      showQuote: false,
+                      showInlineCode: false,
+                      showColorButton: false,
+                      showBackgroundColorButton: false,
+                      showClearFormat: false,
+                      showDirection: false,
+                      showAlignmentButtons: false,
+                      showIndent: false,
+                      showLink: false,
+                      showUndo: false,
+                      showRedo: false,
+                      showSearchButton: false,
+                      showHeaderStyle: true,
+                      showFontFamily: false,
+                      showSubscript: false,
+                      showSuperscript: false,
+                    ),
+                  ),
+
+                  const SizedBox(height: 12),
+                  Container(
+                    height: 500,
+                    decoration: BoxDecoration(
+                      color: const Color.fromARGB(200, 33, 33, 33),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    padding: const EdgeInsets.all(8),
+                    child: QuillEditor.basic(
+                      controller: _quillController,
+                      config: const QuillEditorConfig(
+                        autoFocus: true,
+                        expands: false,
+                        padding: EdgeInsets.zero,
+                        scrollable: true,
+                        customStyles: DefaultStyles(
+                          color: Color.fromRGBO(5, 5, 156, 0),
+                          leading: DefaultListBlockStyle(
+                            TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                            ),
+                            HorizontalSpacing(0, 0),
+                            VerticalSpacing(0, 0),
+                            VerticalSpacing(2, 2),
+                            BoxDecoration(
+                              color: Colors.white,
+                              border: Border(
+                                left: BorderSide(color: Colors.white, width: 2),
+                              ),
+                            ),
+                            null,
+                          ),
+                          lists: DefaultListBlockStyle(
+                            TextStyle(
+                              color: Colors.white,
+                              decorationColor: Colors.white,
+                            ),
+                            HorizontalSpacing(0, 0),
+                            VerticalSpacing(0, 0),
+                            VerticalSpacing(2, 2),
+                            BoxDecoration(
+                              color: Colors.white,
+                              border: Border(
+                                left: BorderSide(color: Colors.white, width: 2),
+                              ),
+                            ),
+                            null,
+                          ),
+
+                          paragraph: DefaultTextBlockStyle(
+                            TextStyle(color: Colors.white),
+                            HorizontalSpacing(0, 0),
+                            VerticalSpacing(0, 0),
+                            VerticalSpacing(0, 0),
+                            null,
+                          ),
+                          h1: DefaultTextBlockStyle(
+                            TextStyle(
+                              color: Colors.white,
+                              fontSize: 32,
+                              fontWeight: FontWeight.bold,
+                            ),
+                            HorizontalSpacing(0, 0),
+                            VerticalSpacing(0, 0),
+                            VerticalSpacing(0, 0),
+                            null,
+                          ),
+                          h2: DefaultTextBlockStyle(
+                            TextStyle(
+                              color: Colors.white,
+                              fontSize: 24,
+                              fontWeight: FontWeight.bold,
+                            ),
+                            HorizontalSpacing(0, 0),
+                            VerticalSpacing(0, 0),
+                            VerticalSpacing(0, 0),
+                            null,
+                          ),
+                          h3: DefaultTextBlockStyle(
+                            TextStyle(
+                              color: Colors.white,
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                            ),
+                            HorizontalSpacing(0, 0),
+                            VerticalSpacing(0, 0),
+                            VerticalSpacing(0, 0),
+                            null,
+                          ),
+                        ),
                       ),
                     ),
                   ),
@@ -271,8 +405,8 @@ class _EditScreenState extends State<EditScreen> {
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: _showActions,
-        backgroundColor: const Color(0xFF1f1d20),
-        child: const Icon(Icons.menu, color: Colors.grey),
+        backgroundColor: const Color.fromARGB(255, 197, 196, 198),
+        child: const Icon(Icons.menu, color: Colors.black87),
       ),
     );
   }

@@ -38,6 +38,10 @@ dependencies:
   google_fonts: ^6.2.1
   cloud_firestore: ^5.6.8
   get: ^4.7.2
+  flutter_quill: ^11.4.1
+  flutter_quill_extensions: ^11.0.0
+  tuple: ^2.0.2
+  speech_to_text: ^7.0.0
 
 dev_dependencies:
   flutter_test:
