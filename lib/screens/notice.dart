@@ -37,7 +37,7 @@ class _EditScreenState extends State<EditScreen> {
     String inputText,
   ) async {
     final url = Uri.parse(
-      "http://192.168.0.104:8000/summarize",
+      "http://X.X.X.X:8000/summarize",
     ); // Replace with your IP or hosted URL
 
     try {
