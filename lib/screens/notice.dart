@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_quill/flutter_quill.dart';
 import 'package:get/get.dart';
 import 'package:notes/screens/home.dart';
-import 'package:tuple/tuple.dart';
+import 'package:http/http.dart' as http;
 
 class EditScreen extends StatefulWidget {
   final String? documentId;
@@ -29,6 +29,59 @@ class _EditScreenState extends State<EditScreen> {
 
     if (widget.documentId != null && widget.documentId!.isNotEmpty) {
       fetchNoticeDetails();
+    }
+  }
+
+  Future<void> summarizeAndShowDialog(
+    BuildContext context,
+    String inputText,
+  ) async {
+    final url = Uri.parse(
+      "http://192.168.0.104:8000/summarize",
+    ); // Replace with your IP or hosted URL
+
+    try {
+      final response = await http.post(
+        url,
+        headers: {"Content-Type": "application/json"},
+        body: jsonEncode({"text": inputText}),
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final summary = data['summary'];
+
+        showDialog(
+          context: context,
+          builder: (_) => AlertDialog(
+            title: Text("Summary"),
+            content: Text(summary),
+            actions: [
+              TextButton(
+                child: Text("Close"),
+                onPressed: () => Navigator.pop(context),
+              ),
+            ],
+          ),
+        );
+      } else {
+        throw Exception("Failed to summarize");
+      }
+    } catch (e) {
+      print("Error: $e");
+      showDialog(
+        context: context,
+        builder: (_) => AlertDialog(
+          title: Text("Error"),
+          content: Text("Unable to summarize the notice."),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text("OK"),
+            ),
+          ],
+        ),
+      );
     }
   }
 
@@ -203,6 +256,28 @@ class _EditScreenState extends State<EditScreen> {
                     );
                   }
                 }
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.summarize, color: Colors.grey),
+              title: const Text(
+                'Summarize',
+                style: TextStyle(color: Colors.grey),
+              ),
+              onTap: () {
+                final noticeText = _quillController.document
+                    .toPlainText()
+                    .trim();
+
+                if (noticeText.isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text("Nothing to summarize")),
+                  );
+                  return;
+                }
+                // Or any source of text
+                summarizeAndShowDialog(context, noticeText);
+                Navigator.pop(context);
               },
             ),
           ],

@@ -22,17 +22,14 @@ class _HomePageState extends State<HomePage> {
   final TextEditingController searchController = TextEditingController();
   String searchQuery = '';
 
-  Color getRandomColor() {
-    final colors = [
-      Colors.amber.shade100,
-      Colors.lightBlue.shade100,
-      Colors.pink.shade100,
-      Colors.green.shade100,
-      Colors.orange.shade100,
-      Colors.purple.shade100,
-    ];
-    return colors[DateTime.now().millisecond % colors.length];
-  }
+  final List<Color> colors = [
+    Colors.amber.shade100,
+    Colors.lightBlue.shade100,
+    Colors.pink.shade100,
+    Colors.green.shade100,
+    Colors.orange.shade100,
+    Colors.purple.shade100,
+  ];
 
   @override
   Widget build(BuildContext context) {
@@ -129,6 +126,8 @@ class _HomePageState extends State<HomePage> {
                       }
                     }
 
+                    final color = colors[index % colors.length];
+
                     return Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 8.0),
                       child: Card(
@@ -137,7 +136,7 @@ class _HomePageState extends State<HomePage> {
                         ),
                         margin: const EdgeInsets.all(7),
                         elevation: 5,
-                        color: getRandomColor(),
+                        color: color,
                         child: ListTile(
                           contentPadding: const EdgeInsets.all(10),
                           title: Text(
