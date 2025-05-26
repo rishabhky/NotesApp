@@ -12,7 +12,7 @@
 .swiftpm/
 migrate_working_dir/
 summarizer_env/
-
+demo.mp4
 
 # IntelliJ related
 *.iml
